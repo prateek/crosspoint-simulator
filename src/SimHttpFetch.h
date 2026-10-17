@@ -1,6 +1,9 @@
 #pragma once
 
 #include <array>
+#include <sstream>
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -18,6 +21,7 @@ struct Response {
   int statusCode = 0;
   int curlExitCode = 0;
   std::string body;
+  std::map<std::string, std::string> headers;
 };
 
 inline bool startsWith(const std::string &value, const char *prefix) {
@@ -135,7 +139,7 @@ inline bool findFileByBasename(const std::string &dir, const std::string &name,
   return false;
 }
 
-inline bool fetchFromFileUrl(const std::string &url, Response &out) {
+inline bool fetchFromFileUrl(const std::string &url, Response &out, bool followRedirects = true) {
   if (!startsWith(url, "file://"))
     return false;
 
@@ -152,7 +156,7 @@ inline bool fetchFromFileUrl(const std::string &url, Response &out) {
   return true;
 }
 
-inline bool fetchFromMockRoot(const std::string &url, Response &out) {
+inline bool fetchFromMockRoot(const std::string &url, Response &out, bool followRedirects = true) {
   const char *root = std::getenv("CROSSPOINT_SIM_HTTP_MOCK_ROOT");
   if (!root || root[0] == '\0')
     return false;
@@ -184,14 +188,20 @@ inline bool fetchFromMockRoot(const std::string &url, Response &out) {
 inline bool fetchWithCurl(const std::string &url, const char *method,
                           const std::map<std::string, std::string> &headers,
                           const std::string &basicAuth, const char *body,
-                          Response &out) {
+                          Response &out, bool followRedirects = true) {
   char tmpTemplate[] = "/tmp/crosspoint-sim-http-XXXXXX";
   int fd = mkstemp(tmpTemplate);
   if (fd < 0)
     return false;
   close(fd);
 
-  std::string cmd = "curl -L -sS --connect-timeout 10 --max-time 60 -o ";
+  char headerTemplate[] = "/tmp/crosspoint-sim-headers-XXXXXX";
+  int headerFd = mkstemp(headerTemplate);
+  if (headerFd < 0) { unlink(tmpTemplate); return false; }
+  close(headerFd);
+  std::string cmd = "curl -sS --connect-timeout 10 --max-time 60 ";
+  if (followRedirects) cmd += "-L ";
+  cmd += "-D " + shellQuote(headerTemplate) + " -o ";
   cmd += shellQuote(tmpTemplate);
   cmd += " -w '%{http_code}'";
   if (method && std::string(method) != "GET")
@@ -208,6 +218,7 @@ inline bool fetchWithCurl(const std::string &url, const char *method,
   FILE *pipe = popen(cmd.c_str(), "r");
   if (!pipe) {
     unlink(tmpTemplate);
+    unlink(headerTemplate);
     return false;
   }
 
@@ -225,19 +236,34 @@ inline bool fetchWithCurl(const std::string &url, const char *method,
   if (!readOk)
     out.body.clear();
 
+  std::string rawHeaders;
+  readFile(headerTemplate, rawHeaders);
+  unlink(headerTemplate);
+  std::istringstream lines(rawHeaders);
+  std::string line;
+  while (std::getline(lines, line)) {
+    if (line.rfind("HTTP/", 0) == 0) { out.headers.clear(); continue; }
+    auto colon = line.find(':');
+    if (colon == std::string::npos) continue;
+    std::string name = line.substr(0, colon);
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+    auto first = line.find_first_not_of(" \t", colon + 1);
+    auto last = line.find_last_not_of("\r\n \t");
+    out.headers[name] = first == std::string::npos ? "" : line.substr(first, last - first + 1);
+  }
   out.statusCode = std::atoi(statusText.c_str());
   return rc == 0 || out.statusCode > 0 || !out.body.empty();
 }
 
 inline bool fetch(const std::string &url, const char *method,
                   const std::map<std::string, std::string> &headers,
-                  const std::string &basicAuth, const char *body, Response &out) {
+                  const std::string &basicAuth, const char *body, Response &out, bool followRedirects = true) {
   out = Response{};
   if (fetchFromMockRoot(url, out))
     return true;
   if (fetchFromFileUrl(url, out))
     return true;
-  return fetchWithCurl(url, method, headers, basicAuth, body, out);
+  return fetchWithCurl(url, method, headers, basicAuth, body, out, followRedirects);
 }
 
 } // namespace sim_http_fetch

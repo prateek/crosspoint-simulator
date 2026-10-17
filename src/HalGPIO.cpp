@@ -517,6 +517,9 @@ void HalGPIO::begin() {
 #elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::MetalioEInk4);
+#elif defined(SIMULATOR_DEVICE_PAPERDIY)
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::PaperDiy);
 #elif defined(SIMULATOR_DEVICE_PAPERMONO)
   _deviceType = DeviceType::X4;
   BoardConfig::selectDevice(BoardConfig::Board::PaperMono);

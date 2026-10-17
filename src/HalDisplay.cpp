@@ -299,6 +299,8 @@ static constexpr const char *WINDOW_TITLE = "Simulator - EEGO A4 (UC8279C)";
 #elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
 static constexpr const char *WINDOW_TITLE =
     "Simulator - Metalio E-Ink 4 (SSD1677)";
+#elif defined(SIMULATOR_DEVICE_PAPERDIY)
+static constexpr const char *WINDOW_TITLE = "Simulator - M5Stack PaperDIY (ED047TC1)";
 #elif defined(SIMULATOR_DEVICE_PAPERMONO)
 static constexpr const char *WINDOW_TITLE =
     "Simulator - M5Stack PaperMono (SSD1677)";

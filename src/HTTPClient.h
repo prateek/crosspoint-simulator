@@ -52,10 +52,11 @@ public:
     url_ = url ? url : "";
     responseBody_.s.clear();
     responseStream_.reset();
+    responseHeaders_.clear();
     statusCode_ = 0;
     responseComplete_ = false;
   }
-  void setFollowRedirects(int mode) { (void)mode; }
+  void setFollowRedirects(int mode) { followRedirects_ = mode != 0; }
   void setReuse(bool reuse) { (void)reuse; }
   void setConnectTimeout(int32_t timeout) { (void)timeout; }
   void setTimeout(uint16_t timeout) { (void)timeout; }
@@ -72,6 +73,8 @@ public:
       basicAuth_ = std::string(user) + ":" + pass;
   }
 
+  int getStatus() const { return statusCode_; }
+  std::string getHeader(const std::string& name) const { auto it=responseHeaders_.find(name); return it==responseHeaders_.end() ? "" : it->second; }
   int GET() { return perform("GET", nullptr); }
   int POST() { return perform("POST", ""); }
   int POST(const char *body) { return perform("POST", body ? body : ""); }
@@ -103,6 +106,7 @@ public:
     basicAuth_.clear();
     responseBody_ = "";
     responseStream_.reset();
+    responseHeaders_.clear();
     statusCode_ = 0;
     responseComplete_ = false;
   }
@@ -173,20 +177,24 @@ private:
   std::unique_ptr<ResponseBodyStream> responseStream_;
   int statusCode_ = 0;
   bool responseComplete_ = false;
+  bool followRedirects_ = true;
+  std::map<std::string, std::string> responseHeaders_;
 
   int perform(const char *method, const char *body) {
     if (url_.empty())
       return 0;
 
     sim_http_fetch::Response response;
-    if (!sim_http_fetch::fetch(url_, method, headers_, basicAuth_, body, response)) {
+    if (!sim_http_fetch::fetch(url_, method, headers_, basicAuth_, body, response, followRedirects_)) {
       responseBody_ = "";
       responseStream_.reset();
-      statusCode_ = 0;
+      responseHeaders_.clear();
+    statusCode_ = 0;
       responseComplete_ = false;
       return simCurlExitCodeToHttpError(response.curlExitCode);
     }
 
+    responseHeaders_ = response.headers;
     responseBody_ = response.body;
     responseStream_.reset();
     statusCode_ = response.statusCode;
