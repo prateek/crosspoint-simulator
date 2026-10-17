@@ -63,6 +63,11 @@ public:
   bool operator!=(const IPAddress &o) const { return !(*this == o); }
 };
 
+using arduino_event_id_t = int;
+struct arduino_event_info_t {};
+constexpr int ARDUINO_EVENT_WIFI_STA_START = 1;
+constexpr int ARDUINO_EVENT_WIFI_AP_START = 2;
+
 class WiFiClass {
   struct Network {
     String ssid;
@@ -166,6 +171,7 @@ class WiFiClass {
   }
 
 public:
+  void onEvent(void (*)(arduino_event_id_t, arduino_event_info_t), arduino_event_id_t) {}
   wl_status_t begin(const char *ssid = nullptr, const char *pass = nullptr) {
     (void)pass;
     currentMode = WIFI_STA;

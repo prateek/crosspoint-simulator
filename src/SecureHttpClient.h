@@ -28,6 +28,7 @@ public:
 
   bool begin(const String &url) {
     http_.begin(client_, url.c_str());
+    http_.setFollowRedirects(0);
     callbackStopped_ = false;
     aborted_ = false;
     return !url.isEmpty();
@@ -96,6 +97,23 @@ public:
   }
 
   String getString() { return http_.getString(); }
+  int getStatus() const { return http_.getStatus(); }
+  std::string getHeader(const std::string& name) const { return http_.getHeader(name); }
+  bool hasContentLength() const { return !getHeader("content-length").empty(); }
+  size_t getContentLength() const { return std::strtoull(getHeader("content-length").c_str(), nullptr, 10); }
+  static bool resolveUrl(const std::string& base, const std::string& location, std::string& result) {
+    if (location.find("://") != std::string::npos) { result=location; return true; }
+    auto scheme=base.find("://");
+    if (scheme==std::string::npos) return false;
+    if (location.rfind("//",0)==0) { result=base.substr(0,scheme+1)+location; return true; }
+    auto path=base.find('/',scheme+3);
+    std::string origin=base.substr(0,path);
+    if (!location.empty() && location[0]=='/') { result=origin+location; return true; }
+    auto end=base.find_first_of("?#");
+    std::string clean=base.substr(0,end);
+    result=path==std::string::npos ? origin+"/"+location : clean.substr(0,clean.rfind('/')+1)+location;
+    return true;
+  }
   int getSize() { return http_.getSize(); }
   bool responseComplete() const {
     return http_.responseComplete() && !callbackStopped_ && !aborted_;

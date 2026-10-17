@@ -35,6 +35,20 @@ Add the simulator to your firmware's platformio.ini as a `lib_dep` and configure
 - `sample-platformio-macos.ini`
 - `sample-platformio-linux-wsl.ini`
 
+### PaperDIY fork
+
+These samples pin this fork's simulator implementation, including the PaperDIY
+profile and HTTP compatibility fixes. Use the `feat/paperdiy` branch of
+[the firmware fork](https://github.com/prateek/crosspoint-reader/tree/feat/paperdiy)
+with its pinned SDK submodule (`git submodule update --init --recursive`). Copy
+the sample for your OS to `platformio.local.ini` in that firmware checkout,
+then run `pio run -e simulator_paperdiy`.
+
+Run `python3 tests/test_http_redirects.py` in this simulator checkout to test
+redirects and credential isolation using loopback HTTP/TLS servers. This needs
+Python 3, a C++17 compiler, `curl`, and the `openssl` CLI. It does not validate
+physical PaperDIY controls, power management, or panel behavior.
+
 No scripts need to be copied into the firmware repo for the simulator to build. The simulator library automatically patches consumer-side compatibility issues from its own build script when PlatformIO fetches it as a dependency, including the common `GfxRenderer::setOrientation()` hook needed for SDL window resizing.
 
 Keep the sample `build_src_filter` exclusions unless your firmware has already

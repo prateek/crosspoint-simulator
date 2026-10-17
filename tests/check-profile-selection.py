@@ -10,6 +10,7 @@ profiles = [
     (["SIMULATOR_DEVICE_X4_PRO"], "xteink_x4_pro", 1, 1, 1),
     (["SIMULATOR_DEVICE_X4_CLASSIC"], "xteink_x4_classic", 0, 0, 0),
     (["SIMULATOR_DEVICE_STICKY"], "sticky", 1, 0, 0),
+    (["SIMULATOR_DEVICE_PAPERDIY"], "paperdiy", 0, 0, 0),
     (["SIMULATOR_DEVICE_PAPERMONO"], "m5stack_paper_mono", 1, 0, 1),
     (["SIMULATOR_DEVICE_METALIO_EINK4"], "metalio_eink4", 1, 1, 0),
     (["SIMULATOR_DEVICE_EEGO_A4"], "eego_a4", 1, 1, 1),
@@ -19,9 +20,15 @@ with tempfile.TemporaryDirectory(prefix="simulator-profiles-") as directory:
     source = folder / "contract.cpp"
     source.write_text('''#include <BoardConfig.h>
 #include <cassert>
+#include <EInkDisplay.h>
 #include <cstdlib>
 #include <cstring>
 int main(int, char **argv) {
+#if FREEINK_DEVICE_PAPERDIY
+  static_assert(EInkDisplay::DISPLAY_WIDTH == 960 && EInkDisplay::DISPLAY_HEIGHT == 540);
+  assert(BoardConfig::ACTIVE.displayWidth == 960 && BoardConfig::ACTIVE.displayHeight == 540);
+  assert(BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::LgfxEpd);
+#endif
   assert(std::strcmp(BoardConfig::ACTIVE.name, argv[1]) == 0);
   assert(BoardConfig::hasTouch() == bool(std::atoi(argv[2])));
   assert(BoardConfig::hasHomeKey() == bool(std::atoi(argv[3])));
@@ -30,7 +37,7 @@ int main(int, char **argv) {
   assert(FREEINK_CAP_FRONTLIGHT == int(BoardConfig::hasPwmFrontlight() || BoardConfig::hasI2cFrontlight()));
   assert(FREEINK_DEVICE_X4 + FREEINK_DEVICE_X3 + FREEINK_DEVICE_X4PRO +
          FREEINK_DEVICE_X4CLASSIC + FREEINK_DEVICE_STICKY +
-         FREEINK_DEVICE_PAPERMONO + FREEINK_DEVICE_METALIO_EINK4 + FREEINK_DEVICE_EEGO_A4 == 1);
+         FREEINK_DEVICE_PAPERDIY + FREEINK_DEVICE_PAPERMONO + FREEINK_DEVICE_METALIO_EINK4 + FREEINK_DEVICE_EEGO_A4 == 1);
 }
 ''')
     command = ["c++", "-std=c++20", f"-I{root / 'src'}", "-DFREEINK_DEVICE_X4=1", str(source)]
@@ -47,6 +54,8 @@ int main(int, char **argv) {
     negatives += [(["SIMULATOR_DEVICE_EEGO_A4"] + flags, "at most one simulated device")
                   for flags, *_ in profiles if flags and "SIMULATOR_DEVICE_EEGO_A4" not in flags]
     negatives += [(["SIMULATOR_DEVICE_EEGO_A4", flag], "uses UC8279C")
+                  for flag in ["SIMULATOR_DISPLAY_UC8179", "SIMULATOR_DISPLAY_UC8279"]]
+    negatives += [(["SIMULATOR_DEVICE_PAPERDIY", flag], "uses a parallel EPD")
                   for flag in ["SIMULATOR_DISPLAY_UC8179", "SIMULATOR_DISPLAY_UC8279"]]
     negatives += [(["SIMULATOR_EEGO_NO_FRONTLIGHT"], "requires EEGO A4")]
     for flags, diagnostic in negatives:

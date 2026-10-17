@@ -37,7 +37,7 @@ def main():
         SDL_VIDEODRIVER="dummy",
         CROSSPOINT_SIM_HTTP_PORT=str(args.port),
         CROSSPOINT_SIM_INPUT_SCRIPT=(
-            "2500:DOWN;2800:DOWN;3100:ENTER;"
+            "2200:DOWN;2500:DOWN;2800:DOWN;3100:ENTER;"
             "4000:DOWN;4300:DOWN;4600:ENTER;20000:QUIT"
         ),
     )
@@ -55,6 +55,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="crosspoint-web-") as directory:
         root = Path(directory)
         (root / "fs_" / "books").mkdir(parents=True)
+        config = root / "fs_" / ".crosspoint"
+        config.mkdir()
+        (config / "settings.json").write_text(json.dumps({"pluginsEnabled": 1}))
         with (root / "simulator.log").open("w+") as log:
             process = subprocess.Popen([str(binary)], cwd=root, env=env,
                                        stdout=log, stderr=log)

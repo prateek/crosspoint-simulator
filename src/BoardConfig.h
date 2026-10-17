@@ -12,7 +12,7 @@
 
 #if (defined(SIMULATOR_DEVICE_X3) + defined(SIMULATOR_DEVICE_X4_PRO) +         \
      defined(SIMULATOR_DEVICE_X4_CLASSIC) + defined(SIMULATOR_DEVICE_STICKY) + \
-     defined(SIMULATOR_DEVICE_PAPERMONO) +                                     \
+     defined(SIMULATOR_DEVICE_PAPERDIY) + defined(SIMULATOR_DEVICE_PAPERMONO) +                                     \
      defined(SIMULATOR_DEVICE_METALIO_EINK4) +                                 \
      defined(SIMULATOR_DEVICE_EEGO_A4)) > 1
 #error "Select at most one simulated device"
@@ -38,8 +38,20 @@
 #error "EEGO A4 uses UC8279C; do not select an Xteink controller override"
 #endif
 
+#if defined(SIMULATOR_DEVICE_PAPERDIY) && \
+    (defined(SIMULATOR_DISPLAY_UC8179) || defined(SIMULATOR_DISPLAY_UC8279))
+#error "PaperDIY uses a parallel EPD; do not select an Xteink controller override"
+#endif
+
 #if defined(SIMULATOR_EEGO_NO_FRONTLIGHT) && !defined(SIMULATOR_DEVICE_EEGO_A4)
 #error "The lightless variant requires EEGO A4"
+#endif
+
+#undef FREEINK_DEVICE_PAPERDIY
+#if defined(SIMULATOR_DEVICE_PAPERDIY)
+#define FREEINK_DEVICE_PAPERDIY 1
+#else
+#define FREEINK_DEVICE_PAPERDIY 0
 #endif
 
 #undef FREEINK_DEVICE_X4
@@ -65,7 +77,16 @@
 #define FREEINK_CAP_HAPTIC 0
 #endif
 
-#if defined(SIMULATOR_DEVICE_EEGO_A4)
+#if defined(SIMULATOR_DEVICE_PAPERDIY)
+#define FREEINK_DEVICE_X4 0
+#define FREEINK_DEVICE_X3 0
+#define FREEINK_DEVICE_X4PRO 0
+#define FREEINK_DEVICE_X4CLASSIC 0
+#define FREEINK_DEVICE_STICKY 0
+#define FREEINK_DEVICE_PAPERMONO 0
+#define FREEINK_CAP_TOUCH 0
+#define FREEINK_CAP_FRONTLIGHT 0
+#elif defined(SIMULATOR_DEVICE_EEGO_A4)
 #define FREEINK_DEVICE_X4 0
 #define FREEINK_DEVICE_X3 0
 #define FREEINK_DEVICE_X4PRO 0
@@ -152,6 +173,7 @@ enum class Board {
   XteinkX4Classic,
   Sticky,
   PaperMono,
+  PaperDiy,
   MetalioEInk4,
   EegoA4,
 };
@@ -201,6 +223,12 @@ struct BoardProfile {
   uint16_t displayWidth = 800;
   uint16_t displayHeight = 480;
   TouchConfig touch = {};
+  uint8_t cornerRadius = 0;
+  int8_t headerOffsetY = 0;
+  int8_t tabBarOffsetY = 0;
+  uint8_t tabBarHeightPct = 100;
+  uint8_t tabBarWidthPct = 100;
+  uint8_t wifiMaxTxPower = 0;
 };
 
 #if defined(SIMULATOR_DISPLAY_UC8179)
@@ -238,6 +266,10 @@ inline constexpr BoardProfile XTEINK_X4_CLASSIC = {
 inline constexpr BoardProfile STICKY = {
     Board::Sticky, "sticky", DisplayController::SSD1677, 0, {5, 6}, {}, 800,
     480, {TouchController::Gt911}};
+inline constexpr BoardProfile PAPER_DIY = {
+    Board::PaperDiy, "paperdiy", DisplayController::LgfxEpd, 0,
+    {4, 3}, {0, 0, 0, 0}, 960, 540, {TouchController::None}};
+
 inline constexpr BoardProfile PAPER_MONO = {
     Board::PaperMono, "m5stack_paper_mono", DisplayController::SSD1677, 0,
     {0, 7}, {9, 7, 3, 7}, 800, 480, {TouchController::Ft6336u}};
@@ -262,7 +294,9 @@ inline constexpr BoardProfile EEGO_A4 = {Board::EegoA4,
                                          552,
                                          {TouchController::Gslx680}};
 
-#if defined(SIMULATOR_DEVICE_EEGO_A4)
+#if defined(SIMULATOR_DEVICE_PAPERDIY)
+inline BoardProfile ACTIVE = PAPER_DIY;
+#elif defined(SIMULATOR_DEVICE_EEGO_A4)
 inline BoardProfile ACTIVE = EEGO_A4;
 #elif defined(SIMULATOR_DEVICE_METALIO_EINK4)
 inline BoardProfile ACTIVE = METALIO_EINK4;
@@ -307,6 +341,9 @@ inline bool selectDevice(Board board) {
   case Board::MetalioEInk4:
     ACTIVE = METALIO_EINK4;
     return true;
+  case Board::PaperDiy:
+    ACTIVE = PAPER_DIY;
+    return true;
   case Board::PaperMono:
     ACTIVE = PAPER_MONO;
     return true;
@@ -320,6 +357,7 @@ inline bool selectDevice(Board board) {
 inline bool isX4Pro() { return ACTIVE.board == Board::XteinkX4Pro; }
 inline bool isX4Classic() { return ACTIVE.board == Board::XteinkX4Classic; }
 inline bool isSticky() { return ACTIVE.board == Board::Sticky; }
+inline bool isPaperDiy() { return ACTIVE.board == Board::PaperDiy; }
 inline bool isPaperMono() { return ACTIVE.board == Board::PaperMono; }
 inline bool isMetalioEInk4() { return ACTIVE.board == Board::MetalioEInk4; }
 inline bool isEegoA4() { return ACTIVE.board == Board::EegoA4; }
