@@ -50,53 +50,68 @@ struct FetchResult {
 };
 
 // The simulator HTTP transport buffers each response, so it cannot replay a
-// partial body. Keep the firmware result contract while doing one host request.
+// partial body. Redirects use the same origin policy as the firmware helper.
 inline FetchResult fetchResumable(
-    const std::string& url, const FetchOptions& options,
+    const std::string& startUrl, const FetchOptions& options,
     const std::function<void(SecureHttpClient&, bool)>& configure,
     const FetchSink& sink,
     const SecureHttpClient::AbortCallback& shouldAbort = nullptr) {
   FetchResult result;
   result.bytes = options.startOffset;
-  if (shouldAbort && shouldAbort()) {
-    result.aborted = true;
-    return result;
-  }
-  SecureHttpClient http;
-  if (!http.begin(url)) {
-    result.status = -1;
-    return result;
-  }
-  if (configure) configure(http, true);
-  if (options.startOffset)
-    http.addHeader("Range", "bytes=" + std::to_string(options.startOffset) + "-");
-  result.status = http.GET();
-  if (shouldAbort && shouldAbort()) {
-    result.aborted = true;
-    return result;
-  }
-  if (result.status < 200 || result.status >= 300 || !http.responseComplete())
-    return result;
-  if (options.startOffset && result.status == 200) {
-    if (!sink.rewind || !sink.rewind()) {
+  std::string url = startUrl;
+  const std::string startOrigin = fetchOrigin(startUrl);
+  constexpr int maxRedirects = 5;
+  for (int redirects = 0; ; ++redirects) {
+    if (shouldAbort && shouldAbort()) {
+      result.aborted = true;
+      return result;
+    }
+    SecureHttpClient http;
+    if (!http.begin(url)) {
+      result.status = -1;
+      return result;
+    }
+    if (configure) configure(http, fetchOrigin(url) == startOrigin);
+    if (options.startOffset)
+      http.addHeader("Range", "bytes=" + std::to_string(options.startOffset) + "-");
+    result.status = http.GET();
+    if (shouldAbort && shouldAbort()) {
+      result.aborted = true;
+      return result;
+    }
+    if (result.status == 301 || result.status == 302 || result.status == 303 ||
+        result.status == 307 || result.status == 308) {
+      const std::string location = http.getHeader("location");
+      if (redirects >= maxRedirects || location.empty() ||
+          !SecureHttpClient::resolveUrl(url, location, url))
+        return result;
+      if (options.redirectToHttp && url.rfind("https://", 0) == 0)
+        url.replace(0, 8, "http://");
+      continue;
+    }
+    if (result.status < 200 || result.status >= 300 || !http.responseComplete())
+      return result;
+    if (options.startOffset && result.status == 200) {
+      if (!sink.rewind || !sink.rewind()) {
+        result.stopped = true;
+        return result;
+      }
+      result.bytes = 0;
+    }
+    const String body = http.getString();
+    if (!body.s.empty() &&
+        (!sink.write || !sink.write(
+                            reinterpret_cast<const uint8_t*>(body.s.data()),
+                            body.s.size()))) {
       result.stopped = true;
       return result;
     }
-    result.bytes = 0;
-  }
-  const String body = http.getString();
-  if (!body.s.empty() &&
-      (!sink.write || !sink.write(
-                          reinterpret_cast<const uint8_t*>(body.s.data()),
-                          body.s.size()))) {
-    result.stopped = true;
+    result.bytes += body.s.size();
+    result.total = result.bytes;
+    if (sink.progress) sink.progress(result.bytes, result.total);
+    result.complete = true;
     return result;
   }
-  result.bytes += body.s.size();
-  result.total = result.bytes;
-  if (sink.progress) sink.progress(result.bytes, result.total);
-  result.complete = true;
-  return result;
 }
 
 }  // namespace freeink
